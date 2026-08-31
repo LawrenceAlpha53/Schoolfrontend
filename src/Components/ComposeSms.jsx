@@ -1060,7 +1060,7 @@ const ComposeSms = () => {
                 className="w-full flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition text-sm text-slate-700 disabled:opacity-50"
               >
                 {quickActionLoading ? <Loader2 className="animate-spin" size={16} /> : <Briefcase size={16} />}
-                Send to All Workers
+                Send to All Workers 
               </button>
             </div>
           </div>

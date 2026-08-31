@@ -58,7 +58,7 @@ import ManageFees from "../Pages/managerfees";
 import CreateUser from "../Pages/CreateUser";
 import NotFound from "../pages/NotFound";
 
-import ProtectedRoute from "../../../ProtectedRoute";
+import ProtectedRoute from "../../ProtectedRoute";
 
 // SMS pages
 import SmsDashboard from "../Components/SmsDashboard";
