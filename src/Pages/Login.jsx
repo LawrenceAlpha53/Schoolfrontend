@@ -67,7 +67,7 @@ const Login = () => {
       console.log("📌 Attempting login with:", formData.username);
 
       const response = await api.post("/auth/login", {
-        Email: formData.username.trim(),
+        email: formData.username.trim(),
         password: formData.password,
       });
 
