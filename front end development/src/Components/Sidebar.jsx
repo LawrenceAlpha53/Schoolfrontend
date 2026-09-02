@@ -23,6 +23,7 @@ const Sidebar = () => {
     { title: "Subjects", icon: BookOpen, path: "adminsubjects" },
     { title: "Attendance", icon: ClipboardList, path: "attendances" },
     { title: "Fees", icon: CreditCard, path: "adminfees" },
+    {title: "Requirements", icon: History, path: "requirements"},
 
 { title: "Pay-Roll", icon: CreditCard, path: "admin-payroll" },
 

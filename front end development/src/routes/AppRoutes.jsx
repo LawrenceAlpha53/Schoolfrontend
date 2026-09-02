@@ -1,7 +1,7 @@
 // src/AppRoutes.jsx - COMPLETE FIXED VERSION (WITH SCHOOL CONTEXT)
 import { Routes, Route, Navigate } from "react-router-dom";
 
-import Login from "../pages/Login";
+import Login from "../Pages/Login";
 import Registration from "../Pages/Registration";
 import Logout from "../Components/Logout";
 
@@ -58,7 +58,7 @@ import ManageFees from "../Pages/managerfees";
 import CreateUser from "../Pages/CreateUser";
 import NotFound from "../pages/NotFound";
 
-import ProtectedRoute from "../../ProtectedRoute";
+import ProtectedRoute from "../../../ProtectedRoute";
 
 // SMS pages
 import SmsDashboard from "../Components/SmsDashboard";
@@ -110,6 +110,10 @@ const AppRoutes = () => {
             <Route path="subjects" element={<Subjects />} />
             <Route path="marks" element={<Marks />} />
             <Route path="notificatons" element={<AdminNotifications />} />
+
+<Route path="requirements" element={<Requirements />} />
+
+
             <Route path="settings" element={<AdminSettings />} />
             <Route path="admin-management" element={<AdminUserManagement />} />
             <Route path="analytics" element={<AdminAnalytics />} />
