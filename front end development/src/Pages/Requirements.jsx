@@ -1,4 +1,4 @@
-// Requirements.jsx – COMPLETE STUDENT REQUIREMENTS SYSTEM (FIXED)
+// Requirements.jsx – COMPLETE SCHOOL REQUIREMENTS SYSTEM (FIXED DATA EXTRACTION)
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   ClipboardList, Search, Plus, TrendingUp, Trash2, X, CheckCircle,
@@ -6,26 +6,63 @@ import {
   RefreshCw, Loader2, Eye, Save, DollarSign, History,
   AlertCircle, ArrowLeft, Users, Building, Layers, Minus, PlusCircle,
   Filter, Calendar, BookOpen, CheckSquare, Edit2, Activity,
-  Check, Square, ChevronDown, ChevronUp
+  Check, Square, ChevronDown, ChevronUp, GraduationCap
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 
+// FIXED: Better data extraction with more robust handling
 const extractData = (response) => {
   if (!response) return [];
-  const d = response.data;
-  if (Array.isArray(d)) return d;
-  if (d?.data && Array.isArray(d.data)) return d.data;
-  if (d?.success && Array.isArray(d.data)) return d.data;
+  console.log('📦 extractData raw:', response);
+  
+  // If response has data property
+  if (response.data) {
+    const d = response.data;
+    console.log('📦 response.data:', d);
+    
+    // If data is an array directly
+    if (Array.isArray(d)) return d;
+    
+    // If data has a data property that's an array
+    if (d.data && Array.isArray(d.data)) return d.data;
+    
+    // If data has a success property and data property
+    if (d.success && d.data && Array.isArray(d.data)) return d.data;
+    
+    // If data has a results property
+    if (d.results && Array.isArray(d.results)) return d.results;
+    
+    // If data has an items property
+    if (d.items && Array.isArray(d.items)) return d.items;
+  }
+  
+  // If response itself is an array
+  if (Array.isArray(response)) return response;
+  
+  console.warn('⚠️ Could not extract array from response:', response);
   return [];
 };
 
 const extractSingle = (response) => {
   if (!response) return null;
-  const d = response.data;
-  if (d?.data) return d.data;
-  if (d?.success && d.data) return d.data;
-  return d;
+  console.log('📦 extractSingle raw:', response);
+  
+  if (response.data) {
+    const d = response.data;
+    console.log('📦 response.data:', d);
+    
+    // If data has a data property
+    if (d.data) return d.data;
+    
+    // If data has a success property and data property
+    if (d.success && d.data) return d.data;
+    
+    // If data itself is the object
+    return d;
+  }
+  
+  return response;
 };
 
 // --- HELPER COMPONENT: InfoField ---
@@ -76,6 +113,7 @@ const Requirements = () => {
   const currentYear = new Date().getFullYear().toString();
   const [selectedAcademicYear, setSelectedAcademicYear] = useState(currentYear);
   const [selectedTerm, setSelectedTerm] = useState('Term 1');
+  const [selectedClass, setSelectedClass] = useState('');
 
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [studentReqList, setStudentReqList] = useState([]);
@@ -87,7 +125,15 @@ const Requirements = () => {
     pending: 0,
     completionPercentage: 0
   });
-  const [feeStatus, setFeeStatus] = useState({ totalFee: 0, amountPaid: 0, balance: 0 });
+  const [feeStatus, setFeeStatus] = useState({ 
+    totalFee: 0, 
+    amountPaid: 0, 
+    balance: 0,
+    term: '',
+    academicYear: '',
+    loading: false,
+    hasRecord: false
+  });
   const [studentReqLoading, setStudentReqLoading] = useState(false);
 
   // Assign multiple requirements to student
@@ -119,12 +165,9 @@ const Requirements = () => {
     description: '',
     quantityRequired: 1,
     unit: 'piece',
-    appliesTo: 'whole_school',
-    genderRestriction: 'all',
-    boardingOption: 'all',
-    classId: null,
     academicYear: currentYear,
     term: 'Term 1',
+    classId: null,
     deadline: null,
     activeStatus: true
   });
@@ -160,6 +203,7 @@ const Requirements = () => {
 
   const selectStudent = (student) => {
     setSelectedStudent(student);
+    setSelectedClass(student.class?.id || '');
     setGlobalSearch('');
     setSearchResults([]);
     setShowResults(false);
@@ -170,17 +214,33 @@ const Requirements = () => {
   const fetchInitialData = useCallback(async () => {
     try {
       setLoading(true);
+      console.log('🔄 Fetching initial data...');
+      
       const [studentsRes, classesRes, reqRes] = await Promise.all([
         api.get('/students', authConfig),
         api.get('/classes', authConfig),
         api.get('/requirements', authConfig)
       ]);
-      setStudents(extractData(studentsRes));
-      setClasses(extractData(classesRes));
-      setRequirements(extractData(reqRes));
+      
+      console.log('📥 Students response:', studentsRes);
+      console.log('📥 Classes response:', classesRes);
+      console.log('📥 Requirements response:', reqRes);
+      
+      const studentsData = extractData(studentsRes);
+      const classesData = extractData(classesRes);
+      const reqData = extractData(reqRes);
+      
+      console.log('📊 Extracted students:', studentsData);
+      console.log('📊 Extracted classes:', classesData);
+      console.log('📊 Extracted requirements:', reqData);
+      
+      setStudents(studentsData);
+      setClasses(classesData);
+      setRequirements(reqData);
+      
       await fetchDashboardStats();
     } catch (error) {
-      console.error('Fetch error:', error);
+      console.error('❌ Fetch error:', error);
       toast.error('Failed to load data');
     } finally {
       setLoading(false);
@@ -190,7 +250,9 @@ const Requirements = () => {
   const fetchDashboardStats = async () => {
     try {
       const res = await api.get('/requirements/dashboard/stats', authConfig);
+      console.log('📊 Dashboard stats response:', res);
       const data = extractSingle(res);
+      console.log('📊 Extracted stats:', data);
       if (data) setDashboardStats(data);
     } catch (err) {
       console.error('Stats error:', err);
@@ -199,7 +261,136 @@ const Requirements = () => {
 
   useEffect(() => { fetchInitialData(); }, [fetchInitialData]);
 
-  // ---- Student Detail (FIXED) ----
+  // ---- Fetch Student Fee Status ----
+  const fetchStudentFeeStatus = async (studentId, academicYear, term) => {
+    if (!studentId) return;
+    
+    setFeeStatus(prev => ({ ...prev, loading: true, hasRecord: false }));
+    
+    try {
+      console.log(`💰 Fetching fee for student ${studentId}, ${term} ${academicYear}`);
+      
+      // Try to get fee data filtered by academic year and term
+      const response = await api.get(
+        `/fees/student/${studentId}?academicYear=${academicYear}&term=${term}`,
+        authConfig
+      );
+      
+      console.log('💰 Fee response:', response);
+      
+      let feeData = {};
+      let found = false;
+      
+      // Extract the data properly
+      const extracted = extractSingle(response);
+      console.log('💰 Extracted fee data:', extracted);
+      
+      if (extracted) {
+        feeData = extracted;
+      } else {
+        feeData = response.data || {};
+      }
+      
+      // Check if we have a valid record
+      if (feeData && typeof feeData === 'object') {
+        // If it has totalFee or amountPaid, it's a record
+        if (feeData.totalFee !== undefined || feeData.amountPaid !== undefined) {
+          // Check if it matches the requested term
+          if (feeData.term === term && feeData.academicYear === academicYear) {
+            found = true;
+          } else if (!feeData.term && !feeData.academicYear) {
+            // If no term/year in the data, assume it's the right one
+            found = true;
+          } else {
+            // It has term/year but doesn't match - check if it's the only one
+            // Try to fetch all fees and filter
+            try {
+              const allFeesRes = await api.get(`/fees/student/${studentId}`, authConfig);
+              const allFees = extractData(allFeesRes);
+              console.log('💰 All fees for student:', allFees);
+              
+              const matchedFee = allFees.find(f => 
+                f.term === term && f.academicYear === academicYear
+              );
+              
+              if (matchedFee) {
+                feeData = matchedFee;
+                found = true;
+              }
+            } catch (e) {
+              console.warn('Could not fetch all fees:', e);
+            }
+          }
+        }
+      }
+      
+      console.log('💰 Final fee data:', feeData, 'found:', found);
+      
+      setFeeStatus({
+        totalFee: feeData.totalFee || 0,
+        amountPaid: feeData.amountPaid || 0,
+        balance: feeData.balance || 0,
+        term: feeData.term || term,
+        academicYear: feeData.academicYear || academicYear,
+        loading: false,
+        hasRecord: found
+      });
+      
+    } catch (error) {
+      console.error('❌ Fee fetch error:', error);
+      
+      // Fallback: Try to get all fees and filter manually
+      try {
+        const fallbackResponse = await api.get(`/fees/student/${studentId}`, authConfig);
+        console.log('💰 Fallback fee response:', fallbackResponse);
+        
+        let allFees = extractData(fallbackResponse);
+        console.log('💰 All fees from fallback:', allFees);
+        
+        // Find matching term
+        const matchedFee = allFees.find(f => 
+          f.term === term && f.academicYear === academicYear
+        );
+        
+        if (matchedFee) {
+          console.log('💰 Matched fee:', matchedFee);
+          setFeeStatus({
+            totalFee: matchedFee.totalFee || 0,
+            amountPaid: matchedFee.amountPaid || 0,
+            balance: matchedFee.balance || 0,
+            term: matchedFee.term || term,
+            academicYear: matchedFee.academicYear || academicYear,
+            loading: false,
+            hasRecord: true
+          });
+        } else {
+          console.log('💰 No matching fee found for term');
+          setFeeStatus({
+            totalFee: 0,
+            amountPaid: 0,
+            balance: 0,
+            term: term,
+            academicYear: academicYear,
+            loading: false,
+            hasRecord: false
+          });
+        }
+      } catch (fallbackError) {
+        console.error('Fallback fee fetch error:', fallbackError);
+        setFeeStatus({
+          totalFee: 0,
+          amountPaid: 0,
+          balance: 0,
+          term: term,
+          academicYear: academicYear,
+          loading: false,
+          hasRecord: false
+        });
+      }
+    }
+  };
+
+  // ---- Student Detail ----
   const loadStudentDetail = async (student) => {
     if (!student) return;
     
@@ -210,27 +401,28 @@ const Requirements = () => {
       
       console.log(`🔄 Loading for student ${student.id} - ${term} ${academicYear}`);
       
-      // 🔥 FIX: Add `status=all` to return ALL assignments (including pending/partial)
+      // Fetch student requirements
       const response = await api.get(
         `/requirements/student/${student.id}?academicYear=${academicYear}&term=${term}&status=all`, 
         authConfig
       );
       
-      console.log('📦 Response:', response.data);
+      console.log('📦 Student requirements response:', response);
       
-      let reqData = [];
-      if (response.data?.data && Array.isArray(response.data.data)) {
-        reqData = response.data.data;
-      } else if (Array.isArray(response.data)) {
-        reqData = response.data;
-      } else if (response.data?.success && Array.isArray(response.data.data)) {
-        reqData = response.data.data;
+      let reqData = extractData(response);
+      console.log('📊 Extracted student requirements:', reqData);
+      
+      // If no data found, try without status filter
+      if (!reqData || reqData.length === 0) {
+        console.log('🔄 Trying without status filter...');
+        const retryResponse = await api.get(
+          `/requirements/student/${student.id}?academicYear=${academicYear}&term=${term}`, 
+          authConfig
+        );
+        reqData = extractData(retryResponse);
+        console.log('📊 Retry extracted:', reqData);
       }
       
-      console.log(`📊 Found ${reqData.length} requirements (including partial)`);
-      
-      // If still empty, try fallback: fetch all requirements and match manually (optional)
-      // but we assume backend now returns all.
       setStudentReqList(reqData);
       
       const total = reqData.length;
@@ -241,27 +433,17 @@ const Requirements = () => {
       
       setStudentStats({ total, completed, partial, pending, completionPercentage });
       
+      // Fetch student fee status for the selected term
+      await fetchStudentFeeStatus(student.id, academicYear, term);
+      
       // Fetch history
       try {
         const historyRes = await api.get(`/requirements/student/${student.id}/history`, authConfig);
-        let historyData = [];
-        if (historyRes.data?.data && Array.isArray(historyRes.data.data)) {
-          historyData = historyRes.data.data;
-        } else if (Array.isArray(historyRes.data)) {
-          historyData = historyRes.data;
-        }
+        let historyData = extractData(historyRes);
         setStudentHistory(historyData.slice(0, 20));
       } catch (e) {
+        console.warn('History fetch error:', e);
         setStudentHistory([]);
-      }
-      
-      // Fetch fee status
-      try {
-        const feeRes = await api.get(`/fees/student/${student.id}`, authConfig);
-        const fd = feeRes.data?.data || feeRes.data || {};
-        setFeeStatus({ totalFee: fd.totalFee || 0, amountPaid: fd.amountPaid || 0, balance: fd.balance || 0 });
-      } catch (e) {
-        setFeeStatus({ totalFee: 0, amountPaid: 0, balance: 0 });
       }
       
     } catch (error) {
@@ -274,9 +456,11 @@ const Requirements = () => {
 
   const clearStudent = () => { 
     setSelectedStudent(null); 
+    setSelectedClass('');
     setStudentReqList([]); 
     setStudentHistory([]); 
     setStudentStats({ total: 0, completed: 0, partial: 0, pending: 0, completionPercentage: 0 });
+    setFeeStatus({ totalFee: 0, amountPaid: 0, balance: 0, term: '', academicYear: '', loading: false, hasRecord: false });
   };
 
   // ---- Toggle requirement selection ----
@@ -336,15 +520,13 @@ const Requirements = () => {
 
           console.log(`📤 Assigning: ${selectedReq.requirementName} - ${term} ${year}`);
 
-          const response = await api.post('/requirements/assign/students', {
+          await api.post('/requirements/assign/students', {
             requirementId: reqId,
             studentIds: [selectedStudent.id],
             override: true,
             academicYear: year,
             term: term
           }, authConfig);
-
-          console.log('✅ Assignment response:', response.data);
 
           // Handle brought items
           const broughtQty = broughtItems[reqId] || 0;
@@ -354,13 +536,7 @@ const Requirements = () => {
               authConfig
             );
             
-            let list = [];
-            if (studentReqsResponse.data?.data && Array.isArray(studentReqsResponse.data.data)) {
-              list = studentReqsResponse.data.data;
-            } else if (Array.isArray(studentReqsResponse.data)) {
-              list = studentReqsResponse.data;
-            }
-            
+            let list = extractData(studentReqsResponse);
             const justAssigned = list.find(r => r.requirementId === reqId);
             
             if (justAssigned && broughtQty > 0) {
@@ -385,7 +561,7 @@ const Requirements = () => {
       } else if (successCount > 0 && errorCount > 0) {
         toast.warning(`⚠️ Assigned ${successCount}, ${errorCount} failed`);
       } else {
-        toast.error('Student already brought this requirement Fully this term');
+        toast.error('Failed to assign requirements');
       }
 
       setShowAssignToStudent(false);
@@ -493,21 +669,13 @@ const Requirements = () => {
         description: reqFormData.description || null,
         quantityRequired: parseInt(reqFormData.quantityRequired) || 1,
         unit: reqFormData.unit || 'piece',
-        appliesTo: reqFormData.appliesTo,
-        genderRestriction: reqFormData.genderRestriction || 'all',
-        boardingOption: reqFormData.boardingOption || 'all',
         academicYear: reqFormData.academicYear,
         term: reqFormData.term,
+        classId: reqFormData.classId ? parseInt(reqFormData.classId) : null,
         deadline: reqFormData.deadline || null,
         activeStatus: reqFormData.activeStatus !== undefined ? reqFormData.activeStatus : true,
         createdBy: parseInt(currentUserId)
       };
-
-      if (reqFormData.appliesTo === 'specific_class' && reqFormData.classId) {
-        dataToSend.classId = parseInt(reqFormData.classId);
-      } else {
-        dataToSend.classId = null;
-      }
 
       if (editingReq) {
         delete dataToSend.createdBy;
@@ -526,12 +694,9 @@ const Requirements = () => {
         description: '',
         quantityRequired: 1,
         unit: 'piece',
-        appliesTo: 'whole_school',
-        genderRestriction: 'all',
-        boardingOption: 'all',
-        classId: null,
         academicYear: selectedAcademicYear,
         term: selectedTerm,
+        classId: null,
         deadline: null,
         activeStatus: true
       });
@@ -572,12 +737,9 @@ const Requirements = () => {
       description: req.description || '',
       quantityRequired: req.quantityRequired || 1,
       unit: req.unit || 'piece',
-      appliesTo: req.appliesTo || 'whole_school',
-      genderRestriction: req.genderRestriction || 'all',
-      boardingOption: req.boardingOption || 'all',
-      classId: req.classId || null,
       academicYear: req.academicYear || selectedAcademicYear,
       term: req.term || selectedTerm,
+      classId: req.classId || null,
       deadline: req.deadline ? req.deadline.split('T')[0] : null,
       activeStatus: req.activeStatus !== undefined ? req.activeStatus : true
     });
@@ -599,14 +761,24 @@ const Requirements = () => {
     return d.toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' });
   };
 
-  // ---- Filter requirements for current term ----
+  // ---- Filter requirements for current term and class ----
   const currentTermRequirements = useMemo(() => {
-    return requirements.filter(r => 
+    let filtered = requirements.filter(r => 
       r.academicYear === selectedAcademicYear && 
       r.term === selectedTerm &&
       r.activeStatus !== false
     );
-  }, [requirements, selectedAcademicYear, selectedTerm]);
+    
+    // If a class is selected, filter by class
+    if (selectedClass) {
+      filtered = filtered.filter(r => 
+        r.classId === parseInt(selectedClass) || r.classId === null
+      );
+    }
+    
+    console.log('📊 Filtered requirements:', filtered);
+    return filtered;
+  }, [requirements, selectedAcademicYear, selectedTerm, selectedClass]);
 
   if (loading) return (
     <div className="flex items-center justify-center h-screen bg-gray-50">
@@ -624,11 +796,11 @@ const Requirements = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
             <Layers className="w-8 h-8 text-indigo-600" />
-            Student Requirements
+            School Requirements
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Manage school requirements per term and track student submissions</p>
+          <p className="text-sm text-gray-500 mt-1">Manage class-specific requirements per academic year and term</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
             <Calendar className="w-4 h-4 text-gray-400" />
             <select 
@@ -645,6 +817,7 @@ const Requirements = () => {
               <option value="2024">2024</option>
               <option value="2025">2025</option>
               <option value="2026">2026</option>
+              <option value="2027">2027</option>
             </select>
             <span className="text-gray-300">|</span>
             <select 
@@ -663,6 +836,30 @@ const Requirements = () => {
               <option>Term 3</option>
             </select>
           </div>
+          
+          {/* Class Filter Dropdown */}
+          <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
+            <GraduationCap className="w-4 h-4 text-gray-400" />
+            <select 
+              value={selectedClass} 
+              onChange={(e) => {
+                const classId = e.target.value;
+                setSelectedClass(classId);
+                if (selectedStudent) {
+                  if (classId && selectedStudent.class?.id !== parseInt(classId)) {
+                    clearStudent();
+                  }
+                }
+              }}
+              className="bg-transparent text-sm font-medium border-none focus:ring-0 outline-none min-w-[120px]"
+            >
+              <option value="">All Classes</option>
+              {classes.map(c => (
+                <option key={c.id} value={c.id}>{c.className}</option>
+              ))}
+            </select>
+          </div>
+          
           <button 
             onClick={() => { 
               setEditingReq(null); 
@@ -672,12 +869,9 @@ const Requirements = () => {
                 description: '',
                 quantityRequired: 1,
                 unit: 'piece',
-                appliesTo: 'whole_school',
-                genderRestriction: 'all',
-                boardingOption: 'all',
-                classId: null,
                 academicYear: selectedAcademicYear,
                 term: selectedTerm,
+                classId: selectedClass ? parseInt(selectedClass) : null,
                 deadline: null,
                 activeStatus: true
               });
@@ -687,6 +881,34 @@ const Requirements = () => {
           >
             <Plus className="w-4 h-4" /> New Requirement
           </button>
+        </div>
+      </div>
+
+      {/* Filter Info Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-gray-400" />
+          <span className="text-sm font-semibold text-gray-700">Filters:</span>
+        </div>
+        <div className="flex items-center gap-2 text-sm">
+          <span className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full font-medium">
+            {selectedAcademicYear}
+          </span>
+          <span className="text-gray-300">→</span>
+          <span className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full font-medium">
+            {selectedTerm}
+          </span>
+          {selectedClass && (
+            <>
+              <span className="text-gray-300">→</span>
+              <span className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full font-medium">
+                {classes.find(c => c.id === parseInt(selectedClass))?.className || 'Selected Class'}
+              </span>
+            </>
+          )}
+        </div>
+        <div className="ml-auto text-xs text-gray-400">
+          Showing {currentTermRequirements.length} requirement(s) for this selection
         </div>
       </div>
 
@@ -966,24 +1188,58 @@ const Requirements = () => {
                   </div>
                 </div>
 
+                {/* Student Fee Balance */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
                   <h3 className="font-bold text-gray-800 flex items-center gap-2">
                     <DollarSign className="w-5 h-5 text-indigo-600" /> Student Fee Balance
                   </h3>
-                  <div className="space-y-3 pt-2">
-                    <div className="flex justify-between items-center py-2 border-b">
-                      <span className="text-sm text-gray-500">Required Fees</span>
-                      <span className="font-bold text-gray-800">{formatUGX(feeStatus.totalFee)}</span>
+                  {feeStatus.loading ? (
+                    <div className="flex justify-center py-6">
+                      <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
                     </div>
-                    <div className="flex justify-between items-center py-2 border-b">
-                      <span className="text-sm text-gray-500">Amount Paid</span>
-                      <span className="font-bold text-emerald-600">{formatUGX(feeStatus.amountPaid)}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-2">
-                      <span className="text-sm text-gray-500">Balance</span>
-                      <span className="font-bold text-rose-600 text-lg">{formatUGX(feeStatus.balance)}</span>
-                    </div>
-                  </div>
+                  ) : (
+                    <>
+                      <div className="text-xs text-gray-400 -mt-2 mb-2">
+                        {selectedTerm} • {selectedAcademicYear}
+                      </div>
+                      {!feeStatus.hasRecord ? (
+                        <div className="py-6 text-center">
+                          <div className="text-gray-400">
+                            <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                            <p className="text-sm font-medium">No fee records for this term</p>
+                            <p className="text-xs text-gray-400 mt-1">No payment data found for {selectedTerm} {selectedAcademicYear}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-3 pt-2">
+                          <div className="flex justify-between items-center py-2 border-b">
+                            <span className="text-sm text-gray-500">Required Fees</span>
+                            <span className="font-bold text-gray-800">{formatUGX(feeStatus.totalFee)}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-2 border-b">
+                            <span className="text-sm text-gray-500">Amount Paid</span>
+                            <span className="font-bold text-emerald-600">{formatUGX(feeStatus.amountPaid)}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-2">
+                            <span className="text-sm text-gray-500">Balance</span>
+                            <span className={`font-bold text-lg ${feeStatus.balance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                              {formatUGX(feeStatus.balance)}
+                            </span>
+                          </div>
+                          {feeStatus.balance === 0 && feeStatus.totalFee > 0 && (
+                            <div className="mt-2 p-2 bg-emerald-50 rounded-lg text-center">
+                              <span className="text-xs font-semibold text-emerald-700">✅ Fully Paid for {selectedTerm}</span>
+                            </div>
+                          )}
+                          {feeStatus.balance > 0 && (
+                            <div className="mt-2 p-2 bg-rose-50 rounded-lg text-center">
+                              <span className="text-xs font-semibold text-rose-700">⚠️ Outstanding Balance: {formatUGX(feeStatus.balance)}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             </>
@@ -1003,11 +1259,15 @@ const Requirements = () => {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b mb-5">
               <div>
-                <h2 className="text-xl font-bold text-gray-800">Requirements templates list</h2>
-                <p className="text-xs text-gray-400 mt-0.5">Active templates set up for {selectedTerm} {selectedAcademicYear}</p>
+                <h2 className="text-xl font-bold text-gray-800">Requirements Templates</h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Active templates for {selectedTerm} {selectedAcademicYear}
+                  {selectedClass && ` • ${classes.find(c => c.id === parseInt(selectedClass))?.className}`}
+                </p>
               </div>
               <div className="text-xs text-indigo-600 font-semibold bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">
-                Found {currentTermRequirements.length} active requirement records
+                Found {currentTermRequirements.length} active requirement(s)
+                {selectedClass && ` for this class`}
               </div>
             </div>
 
@@ -1018,8 +1278,8 @@ const Requirements = () => {
                     <th className="p-4 text-left">Name</th>
                     <th className="p-4 text-left">Category</th>
                     <th className="p-4 text-center">Required Qty</th>
-                    <th className="p-4 text-center">Target Scope</th>
-                    <th className="p-4 text-center">Gender Restriction</th>
+                    <th className="p-4 text-center">Class</th>
+                    <th className="p-4 text-center">Term</th>
                     <th className="p-4 text-center">Actions</th>
                   </tr>
                 </thead>
@@ -1028,7 +1288,8 @@ const Requirements = () => {
                     <tr>
                       <td colSpan={6} className="p-12 text-center text-gray-400">
                         <Package className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                        No template rules configured for this term. Click "New Requirement" to create one.
+                        <p>No template rules configured for this selection.</p>
+                        <p className="text-xs mt-1">Click "New Requirement" to create one for {selectedTerm} {selectedAcademicYear}</p>
                       </td>
                     </tr>
                   ) : (
@@ -1045,18 +1306,18 @@ const Requirements = () => {
                           {req.quantityRequired} {req.unit || 'pieces'}
                         </td>
                         <td className="p-4 text-center text-xs">
-                          {req.appliesTo === 'whole_school' ? (
-                            <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full font-bold">Whole School</span>
-                          ) : req.appliesTo === 'specific_class' ? (
+                          {req.classId ? (
                             <span className="px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full font-bold">
-                              Class: {classes.find(c => c.id === req.classId)?.className || 'Class-bound'}
+                              {classes.find(c => c.id === req.classId)?.className || 'Class-bound'}
                             </span>
                           ) : (
-                            <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full font-bold">Sectional</span>
+                            <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full font-bold">
+                              Whole School
+                            </span>
                           )}
                         </td>
                         <td className="p-4 text-center text-xs font-semibold text-gray-600">
-                          {req.genderRestriction ? req.genderRestriction.toUpperCase() : 'ALL'}
+                          {req.term}
                         </td>
                         <td className="p-4 text-center">
                           <div className="flex items-center justify-center gap-2">
@@ -1068,7 +1329,7 @@ const Requirements = () => {
                               }}
                               className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold transition flex items-center gap-1"
                             >
-                              <Users className="w-3.5 h-3.5" /> Bulk Assign Class
+                              <Users className="w-3.5 h-3.5" /> Bulk Assign
                             </button>
                             <button onClick={() => handleEditReq(req)} className="p-1.5 hover:bg-gray-100 text-gray-500 rounded-lg transition" title="Edit">
                               <Edit2 className="w-4 h-4" />
@@ -1254,34 +1515,6 @@ const Requirements = () => {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="block font-semibold text-gray-700">Target Applies To</label>
-                  <select 
-                    value={reqFormData.appliesTo} 
-                    onChange={e => setReqFormData({ ...reqFormData, appliesTo: e.target.value })}
-                    className="w-full px-3 py-2.5 border rounded-xl outline-none focus:border-indigo-500 text-gray-800 text-sm font-medium"
-                  >
-                    <option value="whole_school">Whole School</option>
-                    <option value="specific_class">Specific Class</option>
-                  </select>
-                </div>
-              </div>
-
-              {reqFormData.appliesTo === 'specific_class' && (
-                <div className="space-y-1">
-                  <label className="block font-semibold text-gray-700">Which Class?</label>
-                  <select 
-                    value={reqFormData.classId || ''} 
-                    onChange={e => setReqFormData({ ...reqFormData, classId: e.target.value ? parseInt(e.target.value) : null })}
-                    className="w-full px-3 py-2.5 border rounded-xl outline-none focus:border-indigo-500 text-gray-800 text-sm font-medium"
-                  >
-                    <option value="">-- Choose Class --</option>
-                    {classes.map(c => <option key={c.id} value={c.id}>{c.className}</option>)}
-                  </select>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
                   <label className="block font-semibold text-gray-700">Academic Year</label>
                   <select 
                     value={reqFormData.academicYear} 
@@ -1291,8 +1524,12 @@ const Requirements = () => {
                     <option value="2024">2024</option>
                     <option value="2025">2025</option>
                     <option value="2026">2026</option>
+                    <option value="2027">2027</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="block font-semibold text-gray-700">Term</label>
                   <select 
@@ -1305,32 +1542,17 @@ const Requirements = () => {
                     <option value="Term 3">Term 3</option>
                   </select>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="block font-semibold text-gray-700">Gender Restriction</label>
+                  <label className="block font-semibold text-gray-700">Target Class</label>
                   <select 
-                    value={reqFormData.genderRestriction} 
-                    onChange={e => setReqFormData({ ...reqFormData, genderRestriction: e.target.value })}
+                    value={reqFormData.classId || ''} 
+                    onChange={e => setReqFormData({ ...reqFormData, classId: e.target.value ? parseInt(e.target.value) : null })}
                     className="w-full px-3 py-2.5 border rounded-xl outline-none focus:border-indigo-500 text-gray-800 text-sm font-medium"
                   >
-                    <option value="all">All Genders</option>
-                    <option value="male">Boys Only</option>
-                    <option value="female">Girls Only</option>
+                    <option value="">Whole School</option>
+                    {classes.map(c => <option key={c.id} value={c.id}>{c.className}</option>)}
                   </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="block font-semibold text-gray-700">Boarder / Day option</label>
-                  <select 
-                    value={reqFormData.boardingOption} 
-                    onChange={e => setReqFormData({ ...reqFormData, boardingOption: e.target.value })}
-                    className="w-full px-3 py-2.5 border rounded-xl outline-none focus:border-indigo-500 text-gray-800 text-sm font-medium"
-                  >
-                    <option value="all">All Students</option>
-                    <option value="boarding">Boarding Only</option>
-                    <option value="day">Day Scholars Only</option>
-                  </select>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Leave as "Whole School" to apply to all classes</p>
                 </div>
               </div>
 
